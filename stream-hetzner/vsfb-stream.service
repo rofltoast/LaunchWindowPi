@@ -1,0 +1,27 @@
+[Unit]
+Description=VSFB-TV retro kiosk — 720p YouTube Live (Hetzner CX22)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+# Secrets live OUT of the repo. Mode 600, root:root on disk.
+EnvironmentFile=/etc/vsfb-stream.env
+ExecStart=/opt/vsfb-stream/run.sh
+Restart=on-failure
+RestartSec=10
+# systemd auto-creates /run/vsfb-stream 0700 owned by the service user.
+RuntimeDirectory=vsfb-stream
+RuntimeDirectoryMode=0700
+# 2 GiB box — leave breathing room for kernel+base services.
+MemoryMax=1500M
+# 2 vCPUs at 200% means pin both cores to this service if needed.
+CPUQuota=190%
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vsfb-stream
+
+[Install]
+WantedBy=multi-user.target
