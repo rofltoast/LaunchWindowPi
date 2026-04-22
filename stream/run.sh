@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-KIOSK_URL="${KIOSK_URL:-http://localhost:8080/retro}"
+KIOSK_URL="${KIOSK_URL:-http://localhost:8080/retro?autostart=1}"
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
 W=1280
 H=720

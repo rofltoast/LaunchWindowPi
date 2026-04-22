@@ -97,7 +97,34 @@ export default function RetroApp() {
   // actually being played for each slide.
   const showDebug = typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('debug') === '1';
-  const [gated, setGated] = useState(true);
+  // v84 — ?autostart=1 skips the BEGIN BROADCAST gate. This is
+  // exclusively for the YouTube Live headless-chromium capture on the
+  // pi, which launches chromium with
+  //   --autoplay-policy=no-user-gesture-required
+  // so AudioContext.resume() + <audio>.play() don't need a click. Real
+  // viewers hitting the kiosk in their own browser still get the gate
+  // (their browser blocks autoplay until they tap). Do NOT default this
+  // on — it WILL be ignored by normal browsers and produce a broken
+  // silent kiosk.
+  const autostart = typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('autostart') === '1';
+  const [gated, setGated] = useState(!autostart);
+  // Fire begin() once on mount in autostart mode. Can't just call it
+  // inline in render — begin() is async and does side-effects
+  // (AudioContext, <audio>.play). useEffect with [] deps guarantees
+  // one shot per component lifetime.
+  useEffect(() => {
+    if (!autostart) return undefined;
+    let cancelled = false;
+    (async () => {
+      try { await begin(); } catch (e) {
+        console.warn('[retro] autostart begin() failed:', e);
+      }
+      if (!cancelled) setGated(false);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [cursor, setCursor] = useState(0); // index into CYCLE
   const [activeSkitSlot, setActiveSkitSlot] = useState(null); // which skit is currently rendering
   // v76 — portrait "codec call" state. When a narration clip plays we
