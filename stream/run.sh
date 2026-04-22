@@ -104,7 +104,7 @@ exec ffmpeg -hide_banner -loglevel warning -nostats \
   -f x11grab -framerate "$FPS" -video_size "${W}x${H}" -i ":${DISPLAY_NUM}.0+0,0" \
   -thread_queue_size 512 \
   -f pulse -i vsfb_out.monitor \
-  -c:v h264_v4l2m2m -b:v "$VBITRATE" -maxrate "$VBITRATE" -bufsize 7000k \
+  -c:v libx264 -preset ultrafast -tune zerolatency -b:v "$VBITRATE" -maxrate "$VBITRATE" -bufsize 7000k \
   -pix_fmt yuv420p -g $((FPS*2)) -r "$FPS" \
   -c:a aac -b:a "$ABITRATE" -ar 44100 -ac 2 \
   -f flv "${YT_URL}/${STREAM_KEY}"
