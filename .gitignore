@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-v*/
+build/
+
+# Deployment tarballs
+*.tar.gz
+v*-dist/
+v*-patch/
+
+# Voice-server runtime data (user recordings / portraits / skits) —
+# private content generated at runtime, not source code
+voice-server/data/
+voice-data/
+data/
+
+# Log files
+*.log
+voice-server.log
+
+# macOS / editor cruft
+.DS_Store
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example

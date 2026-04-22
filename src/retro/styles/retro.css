@@ -1,0 +1,1979 @@
+/* ============================================================
+   VSFB Retro — Local on the 8s vibe (TWC 1992-ish)
+   ============================================================
+   Design goals:
+    - deep navy → royal blue gradient backdrop (#020a3a → #1237a6)
+    - chunky shadowed headlines (orange/yellow accents)
+    - scanlines + gentle wobble + CRT curvature (pure CSS/SVG)
+    - one bottom crawl bar (yellow on dark blue)
+    - readable on a Pi 4 TV at 1080p
+
+   We avoid Star4000 (paid / unclear license) and instead use a stack
+   that lands visually close on any browser:
+      "VT323" (Google), fallback to Monaco/Menlo, then ui-monospace.
+
+   Everything is namespaced under `.rt-` so it can't collide with the
+   existing btop++/polished/terminal styles in base.css.
+   ============================================================ */
+
+/* Google Fonts load — cheap (one file, ~40KB). */
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+:root {
+  --rt-navy-deep:  #020a3a;
+  --rt-navy:       #0c1a63;
+  --rt-blue:       #1237a6;
+  --rt-blue-hi:    #2455d8;
+  --rt-ink:        #0c1a63;
+
+  --rt-gold:       #ffc631;
+  --rt-gold-hi:    #ffe47a;
+  --rt-orange:     #ff7a1a;
+  --rt-cream:      #fff4cc;
+  --rt-white:      #f7faff;
+
+  --rt-shadow:     #000616;
+
+  --rt-crawl-h:    clamp(36px, 3.6vw, 56px);
+
+  --rt-scan-alpha: 0.32;  /* 0 = none, ~0.5 = dense */
+}
+
+/* ---- Page shell ---- */
+.rt-app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  font-family: 'VT323', Monaco, Menlo, ui-monospace, monospace;
+  color: var(--rt-white);
+  letter-spacing: 0.02em;
+  background:
+    radial-gradient(ellipse at 50% 25%, var(--rt-blue) 0%, var(--rt-navy) 55%, var(--rt-navy-deep) 100%);
+}
+
+/* Whole screen gets a very subtle CRT curvature + vignette */
+.rt-crt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0 80px rgba(0, 0, 0, 0.55),
+    inset 0 0 160px rgba(0, 0, 20, 0.55);
+  /* Tiny barrel via outer radius + transform perspective on inner frame */
+}
+
+/* Scanline overlay. Two stacked gradients for a denser pattern without
+   moire artefacts at different zoom levels. */
+.rt-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, var(--rt-scan-alpha)) 0px,
+      rgba(0, 0, 0, var(--rt-scan-alpha)) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+/* A faint slowly-rolling tracking band, like a VCR with weak tracking. */
+.rt-tracking {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 95;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(255,255,255,0.05) 48%,
+    rgba(255,255,255,0.12) 50%,
+    rgba(255,255,255,0.05) 52%,
+    transparent 100%
+  );
+  background-size: 100% 220%;
+  animation: rt-roll 17s linear infinite;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+@keyframes rt-roll {
+  0%   { background-position: 0 -140%; }
+  100% { background-position: 0 220%; }
+}
+
+/* Gentle horizontal jitter on the main content. SVG turbulence filter. */
+.rt-wobble {
+  animation: rt-jitter 4.2s ease-in-out infinite;
+}
+
+@keyframes rt-jitter {
+  0%, 100% { transform: translate(0, 0); }
+  23%      { transform: translate(0.6px, -0.3px); }
+  47%      { transform: translate(-0.4px, 0.5px); }
+  71%      { transform: translate(0.3px, 0.4px); }
+}
+
+/* ---- Layout frame ---- */
+.rt-frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: clamp(18px, 1.8vw, 28px);
+  padding-bottom: calc(var(--rt-crawl-h) + clamp(18px, 1.8vw, 28px));
+}
+
+.rt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  padding: 10px 14px;
+  margin-bottom: clamp(14px, 1.6vw, 22px);
+  border-bottom: 4px double var(--rt-gold);
+}
+
+.rt-header .rt-logo {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(16px, 1.6vw, 22px);
+  color: var(--rt-gold);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  letter-spacing: 2px;
+}
+.rt-header .rt-logo small {
+  display: block;
+  font-family: 'VT323', monospace;
+  font-size: clamp(14px, 1.2vw, 18px);
+  color: var(--rt-cream);
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+  letter-spacing: 3px;
+  margin-top: 2px;
+}
+.rt-header .rt-clock {
+  font-family: 'VT323', monospace;
+  font-size: clamp(22px, 2.6vw, 36px);
+  color: var(--rt-gold-hi);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  font-variant-numeric: tabular-nums;
+}
+.rt-header .rt-clock .rt-date {
+  display: block;
+  font-size: 0.6em;
+  color: var(--rt-cream);
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+  letter-spacing: 4px;
+}
+
+/* ---- Slides ---- */
+.rt-stage {
+  position: relative;
+  display: grid;
+  place-items: stretch;
+}
+
+.rt-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 800ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.2vw, 18px);
+  padding: clamp(10px, 1.4vw, 24px);
+}
+.rt-slide.rt-slide-on {
+  opacity: 1;
+  z-index: 2;
+}
+
+.rt-slide-title {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(14px, 1.5vw, 22px);
+  color: var(--rt-gold);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  letter-spacing: 3px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, var(--rt-blue-hi) 0%, var(--rt-blue) 100%);
+  border: 2px solid var(--rt-gold);
+  border-bottom-width: 4px;
+  display: inline-block;
+  align-self: flex-start;
+  box-shadow: 4px 4px 0 var(--rt-shadow);
+}
+
+.rt-panels {
+  display: grid;
+  gap: clamp(10px, 1.2vw, 18px);
+  flex: 1 1 auto;
+}
+.rt-panels.rt-cols-2 { grid-template-columns: 1fr 1fr; }
+.rt-panels.rt-cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.rt-panel {
+  background: linear-gradient(180deg, rgba(5,17,83,0.9) 0%, rgba(2,10,58,0.85) 100%);
+  border: 3px solid var(--rt-gold);
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  padding: clamp(12px, 1.4vw, 22px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rt-panel h3 {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(10px, 1.0vw, 14px);
+  color: var(--rt-cream);
+  letter-spacing: 3px;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+  margin: 0 0 8px 0;
+  border-bottom: 2px solid var(--rt-gold);
+  padding-bottom: 6px;
+}
+.rt-panel .rt-big {
+  font-family: 'VT323', monospace;
+  font-size: clamp(44px, 6vw, 92px);
+  line-height: 1;
+  color: var(--rt-white);
+  text-shadow: 4px 4px 0 var(--rt-shadow);
+  font-variant-numeric: tabular-nums;
+}
+.rt-panel .rt-units {
+  font-size: 0.45em;
+  color: var(--rt-gold-hi);
+  margin-left: 6px;
+}
+.rt-panel dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: clamp(16px, 1.4vw, 22px);
+}
+.rt-panel dt { color: var(--rt-gold-hi); letter-spacing: 2px; }
+.rt-panel dd { margin: 0; color: var(--rt-white); font-variant-numeric: tabular-nums; }
+
+/* Forecast strip — 4-up */
+.rt-forecast {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(10px, 1.0vw, 16px);
+  flex: 1 1 auto;
+}
+.rt-forecast .rt-card {
+  background: linear-gradient(180deg, rgba(18,55,166,0.85), rgba(5,17,83,0.9));
+  border: 3px solid var(--rt-gold);
+  box-shadow: 5px 5px 0 var(--rt-shadow);
+  padding: clamp(10px, 1vw, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rt-forecast .rt-card .rt-when {
+  color: var(--rt-gold);
+  letter-spacing: 2px;
+  font-size: clamp(14px, 1.2vw, 18px);
+}
+.rt-forecast .rt-card .rt-hilo {
+  font-family: 'VT323', monospace;
+  font-size: clamp(40px, 4vw, 64px);
+  color: var(--rt-white);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  line-height: 1;
+}
+.rt-forecast .rt-card .rt-short {
+  color: var(--rt-cream);
+  font-size: clamp(14px, 1.1vw, 18px);
+  min-height: 3em;
+}
+.rt-forecast .rt-card .rt-wind {
+  color: var(--rt-gold-hi);
+  font-size: clamp(13px, 1vw, 16px);
+  margin-top: auto;
+}
+
+/* Launch slide */
+.rt-launch-hero {
+  background: linear-gradient(180deg, rgba(2,10,58,0.9), rgba(18,55,166,0.7));
+  border: 3px solid var(--rt-gold);
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  padding: clamp(16px, 2vw, 28px);
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(14px, 1.5vw, 24px);
+}
+.rt-launch-hero .rt-mission {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(18px, 2.2vw, 36px);
+  color: var(--rt-gold);
+  text-shadow: 4px 4px 0 var(--rt-shadow);
+  line-height: 1.15;
+  letter-spacing: 2px;
+}
+.rt-launch-hero .rt-rocket-name {
+  color: var(--rt-cream);
+  font-size: clamp(18px, 1.6vw, 26px);
+  margin-top: 12px;
+  letter-spacing: 3px;
+}
+.rt-launch-hero .rt-when {
+  margin-top: 22px;
+  color: var(--rt-white);
+  font-size: clamp(24px, 2.6vw, 40px);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+}
+.rt-launch-hero .rt-tminus {
+  margin-top: 18px;
+  font-size: clamp(60px, 6vw, 110px);
+  line-height: 1;
+  color: var(--rt-gold-hi);
+  text-shadow: 4px 4px 0 var(--rt-shadow);
+  font-variant-numeric: tabular-nums;
+}
+.rt-launch-hero .rt-details {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 20px;
+  font-size: clamp(16px, 1.4vw, 22px);
+  align-self: center;
+}
+.rt-launch-hero .rt-details dt { color: var(--rt-gold); letter-spacing: 2px; }
+.rt-launch-hero .rt-details dd { margin: 0; color: var(--rt-white); }
+
+/* v60 — Upcoming-launches list: big primary card on top, list below */
+.rt-launch-list-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 1.5vw, 20px);
+  padding: clamp(12px, 1.5vw, 22px);
+  background: linear-gradient(180deg, rgba(2,10,58,0.92), rgba(18,55,166,0.72));
+  border: 3px solid var(--rt-gold);
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  overflow: hidden;
+}
+.rt-launch-primary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: clamp(14px, 2vw, 28px);
+  align-items: center;
+  padding: clamp(10px, 1.2vw, 18px) clamp(12px, 1.5vw, 22px);
+  border-bottom: 2px dashed var(--rt-gold);
+  padding-bottom: clamp(12px, 1.5vw, 20px);
+}
+.rt-launch-primary-icon {
+  width: clamp(72px, 9vw, 132px);
+  height: auto;
+  color: var(--rt-gold-hi);
+  filter: drop-shadow(4px 4px 0 var(--rt-shadow));
+}
+.rt-launch-primary-body { display: grid; gap: 6px; }
+.rt-launch-primary-body .rt-mission {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(18px, 2.4vw, 40px);
+  color: var(--rt-gold);
+  text-shadow: 4px 4px 0 var(--rt-shadow);
+  letter-spacing: 2px;
+  line-height: 1.1;
+}
+.rt-launch-primary-body .rt-rocket-name {
+  color: var(--rt-cream);
+  font-size: clamp(16px, 1.4vw, 22px);
+  letter-spacing: 3px;
+}
+.rt-launch-primary-body .rt-primary-meta {
+  color: var(--rt-white);
+  font-size: clamp(14px, 1.3vw, 20px);
+  letter-spacing: 1px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rt-launch-primary-body .rt-primary-meta .rt-pad { color: var(--rt-gold); }
+.rt-launch-primary-body .rt-tminus {
+  margin-top: 4px;
+  font-size: clamp(32px, 4vw, 68px);
+  line-height: 1;
+  color: var(--rt-gold-hi);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  font-variant-numeric: tabular-nums;
+}
+
+/* v82 — dedicated clipping viewport that sits BELOW the primary card.
+   The list translates up inside this box; rows can't spill over the
+   primary because the primary is outside this container. */
+.rt-launch-viewport {
+  flex: 1 1 auto;
+  min-height: 0;       /* required for flex-child overflow */
+  overflow: hidden;
+  position: relative;
+}
+.rt-launch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(6px, 0.9vw, 12px);
+  will-change: transform;
+  transform: translateY(0);
+}
+.rt-launch-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(10px, 1.3vw, 20px);
+  align-items: center;
+  padding: clamp(6px, 0.9vw, 12px) clamp(10px, 1.3vw, 18px);
+  background: rgba(10,24,80,0.55);
+  border-left: 4px solid var(--rt-gold);
+  border-right: 1px solid rgba(255,198,49,0.25);
+  font-family: 'VT323', monospace;
+}
+.rt-launch-row-icon {
+  width: clamp(32px, 3.6vw, 54px);
+  height: auto;
+  color: var(--rt-gold);
+  filter: drop-shadow(2px 2px 0 var(--rt-shadow));
+  flex: 0 0 auto;
+}
+.rt-launch-row-main { min-width: 0; }
+.rt-launch-row-mission {
+  color: var(--rt-cream);
+  font-size: clamp(16px, 1.6vw, 26px);
+  letter-spacing: 1.5px;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rt-launch-row-sub {
+  color: #a8c4ff;
+  font-size: clamp(12px, 1.1vw, 17px);
+  letter-spacing: 1px;
+}
+.rt-launch-row-sub .rt-launch-row-rocket { color: var(--rt-gold); }
+.rt-launch-row-sub .rt-launch-row-pad    { color: var(--rt-white); margin-left: 8px; }
+.rt-launch-row-when {
+  color: var(--rt-gold-hi);
+  font-size: clamp(14px, 1.4vw, 22px);
+  letter-spacing: 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Fact slide — big centered text */
+.rt-fact {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: clamp(20px, 3vw, 60px);
+  background: linear-gradient(180deg, rgba(2,10,58,0.88), rgba(18,55,166,0.75));
+  border: 3px solid var(--rt-gold);
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+}
+.rt-fact .rt-fact-kicker {
+  color: var(--rt-gold);
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(12px, 1.2vw, 18px);
+  letter-spacing: 3px;
+  margin-bottom: 18px;
+}
+.rt-fact .rt-fact-body {
+  font-family: 'VT323', monospace;
+  font-size: clamp(28px, 3.4vw, 58px);
+  line-height: 1.25;
+  color: var(--rt-cream);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  max-width: 30ch;
+}
+.rt-fact .rt-fact-body em {
+  color: var(--rt-gold-hi);
+  font-style: normal;
+}
+
+/* ---- Bottom crawl ---- */
+.rt-crawl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--rt-crawl-h);
+  background: linear-gradient(180deg, var(--rt-navy-deep), var(--rt-navy));
+  border-top: 3px double var(--rt-gold);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+}
+.rt-crawl-inner {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: rt-crawl-scroll 80s linear infinite;
+  font-family: 'VT323', monospace;
+  font-size: calc(var(--rt-crawl-h) * 0.62);
+  color: var(--rt-gold);
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+  letter-spacing: 2px;
+}
+.rt-crawl-inner b {
+  color: var(--rt-gold-hi);
+  margin: 0 1ch;
+}
+.rt-crawl-inner .sep {
+  color: var(--rt-cream);
+  margin: 0 2ch;
+  opacity: 0.6;
+}
+/* v60 — color real info, grey silly asides so they read as tongue-in-cheek */
+.rt-crawl-item { color: var(--rt-gold); }
+.rt-crawl-item.rt-crawl-brand { color: var(--rt-gold-hi); }
+.rt-crawl-item.rt-crawl-brand b { color: #fff; }
+.rt-crawl-item.rt-crawl-news  { color: #eaf0ff; }     /* real launch info — bright */
+.rt-crawl-item.rt-crawl-news  b { color: var(--rt-gold-hi); }
+.rt-crawl-item.rt-crawl-data  { color: #a8e7ff; }     /* weather / temps — cool accent */
+.rt-crawl-item.rt-crawl-data  b { color: #7ad2ff; }
+.rt-crawl-item.rt-crawl-silly {
+  color: #8a8f9c;                                      /* greyed silly asides */
+  opacity: 0.75;
+  font-style: italic;
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+}
+.rt-crawl-item.rt-crawl-silly b { color: #6f7381; }
+
+@keyframes rt-crawl-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ---- Gate: user must click to unmute + start broadcast ---- */
+.rt-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(3px);
+}
+.rt-gate button {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(14px, 1.8vw, 22px);
+  color: var(--rt-navy-deep);
+  background: var(--rt-gold);
+  border: 4px solid var(--rt-gold-hi);
+  padding: 24px 40px;
+  letter-spacing: 3px;
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  cursor: pointer;
+  animation: rt-blink 1.2s steps(2,end) infinite;
+}
+@keyframes rt-blink {
+  0%, 50%  { opacity: 1; }
+  50.01%, 100% { opacity: 0.72; }
+}
+
+/* ---- Admin page ---- */
+.rt-admin {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  font-family: 'VT323', monospace;
+  color: var(--rt-white);
+  background: radial-gradient(ellipse at 50% 10%, var(--rt-blue) 0%, var(--rt-navy-deep) 80%);
+  padding: 28px;
+}
+.rt-admin h1 {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  color: var(--rt-gold);
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  letter-spacing: 3px;
+  font-size: clamp(16px, 1.8vw, 24px);
+  margin: 0 0 18px 0;
+}
+.rt-admin h2 {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  color: var(--rt-gold);
+  font-size: clamp(11px, 1.1vw, 14px);
+  letter-spacing: 3px;
+  margin: 24px 0 10px 0;
+  border-bottom: 2px solid var(--rt-gold);
+  padding-bottom: 6px;
+}
+.rt-admin .rt-slot {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 2px solid rgba(255,198,49,0.3);
+  margin-bottom: 8px;
+  background: rgba(2,10,58,0.6);
+  font-size: clamp(14px, 1vw, 18px);
+}
+.rt-admin .rt-slot.rt-has { border-color: var(--rt-gold); }
+.rt-admin .rt-slot .rt-slot-label { color: var(--rt-cream); letter-spacing: 1px; }
+.rt-admin .rt-slot .rt-slot-id    { color: var(--rt-gold-hi); font-family: 'VT323', monospace; font-size: 0.85em; }
+.rt-admin button, .rt-admin label.rt-upload {
+  font-family: 'VT323', monospace;
+  font-size: clamp(14px, 1vw, 16px);
+  padding: 6px 12px;
+  background: var(--rt-blue);
+  color: var(--rt-cream);
+  border: 2px solid var(--rt-gold);
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.rt-admin button:hover, .rt-admin label.rt-upload:hover { background: var(--rt-blue-hi); }
+.rt-admin button.rt-rec-on { background: #c42121; color: #fff; border-color: #ffafaf; }
+.rt-admin audio { height: 28px; }
+.rt-admin .rt-meta { color: var(--rt-gold-hi); font-size: 0.9em; }
+.rt-admin .rt-hint { color: var(--rt-cream); opacity: 0.7; font-size: 0.85em; margin-top: 4px; }
+.rt-admin button:disabled,
+.rt-admin label.rt-upload[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: #1b2a5c;
+}
+
+/* ---- Mic permission banner ---- */
+.rt-admin .rt-mic-banner {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 0 0 18px 0;
+  padding: 14px 16px;
+  border: 2px solid var(--rt-gold);
+  background: rgba(255, 198, 49, 0.08);
+  color: var(--rt-cream);
+  border-radius: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.rt-admin .rt-mic-banner code {
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 0.92em;
+}
+.rt-admin .rt-mic-banner strong {
+  color: var(--rt-gold-hi);
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 2px;
+}
+.rt-admin .rt-mic-banner.rt-mic-ok {
+  border-color: #6af06a;
+  background: rgba(106, 240, 106, 0.1);
+  color: #d8ffd8;
+}
+.rt-admin .rt-mic-banner.rt-mic-warn {
+  border-color: #ff7a1a;
+  background: rgba(255, 122, 26, 0.12);
+}
+.rt-admin .rt-mic-enable {
+  background: var(--rt-gold);
+  color: #102244;
+  font-weight: bold;
+  padding: 8px 16px;
+  border: 2px solid var(--rt-gold-hi);
+  border-radius: 3px;
+  letter-spacing: 2px;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rt-admin .rt-mic-enable:hover { background: var(--rt-gold-hi); }
+.rt-admin .rt-mic-err {
+  display: block;
+  margin-top: 6px;
+  color: #ffb0a0;
+  font-size: 0.85em;
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+/* ---- Narrator Studio (v54) ---- */
+.rt-admin .rt-sub {
+  color: var(--rt-cream);
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 4px 0 18px 0;
+  opacity: 0.88;
+}
+.rt-admin .rt-sub code {
+  color: var(--rt-gold-hi);
+  background: rgba(255, 198, 49, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.rt-admin .rt-voice-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  border: 2px solid var(--rt-gold);
+  background: rgba(255, 198, 49, 0.06);
+  color: var(--rt-cream);
+  padding: 14px 16px;
+  margin: 0 0 20px 0;
+  border-radius: 4px;
+}
+.rt-admin .rt-voice-card.rt-voice-have {
+  border-color: #6af06a;
+  background: rgba(106, 240, 106, 0.08);
+}
+.rt-admin .rt-voice-card strong { color: var(--rt-gold-hi); letter-spacing: 1px; }
+.rt-admin .rt-voice-card .rt-meta { color: var(--rt-cream); opacity: 0.7; }
+.rt-admin .rt-voice-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.rt-admin .rt-voice-actions audio { max-width: 260px; }
+
+.rt-admin .rt-error {
+  color: #ff8a6a;
+  border: 1px solid #ff7a1a;
+  background: rgba(255, 122, 26, 0.08);
+  padding: 10px 14px;
+  border-radius: 3px;
+  margin: 0 0 12px 0;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 14px;
+}
+
+.rt-admin .rt-studio-actions {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 14px 0;
+}
+.rt-admin .rt-studio-actions button {
+  background: var(--rt-gold);
+  color: #102244;
+  font-weight: bold;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  font-family: inherit;
+}
+.rt-admin .rt-studio-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #1b2a5c;
+  color: var(--rt-cream);
+}
+
+.rt-admin .rt-slot-table { display: block; }
+.rt-admin .rt-slot-hd {
+  display: grid;
+  grid-template-columns: 180px 1fr 260px;
+  gap: 14px;
+  padding: 6px 4px;
+  color: var(--rt-gold-hi);
+  font-size: 12px;
+  letter-spacing: 2px;
+  border-bottom: 2px solid var(--rt-gold);
+  margin-bottom: 8px;
+}
+.rt-admin .rt-empty {
+  color: var(--rt-cream);
+  opacity: 0.7;
+  padding: 16px;
+  text-align: center;
+  border: 1px dashed var(--rt-gold);
+  border-radius: 3px;
+}
+.rt-admin .rt-studio-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 260px;
+  gap: 14px;
+  align-items: start;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255, 198, 49, 0.25);
+}
+.rt-admin .rt-studio-row.rt-has .rt-slot-id code { color: #6af06a; }
+.rt-admin .rt-studio-row.rt-dirty {
+  background: rgba(255, 198, 49, 0.06);
+}
+.rt-admin .rt-studio-meta .rt-slot-id code {
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--rt-cream);
+  font-size: 14px;
+}
+.rt-admin .rt-studio-meta .rt-meta {
+  color: var(--rt-cream);
+  opacity: 0.65;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.rt-admin .rt-studio-tpl { position: relative; }
+.rt-admin .rt-studio-tpl textarea {
+  width: 100%;
+  background: #0b1230;
+  color: var(--rt-cream);
+  border: 1px solid var(--rt-gold);
+  border-radius: 3px;
+  padding: 8px 10px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.rt-admin .rt-studio-tpl textarea:focus {
+  outline: 2px solid var(--rt-gold-hi);
+  outline-offset: 1px;
+}
+.rt-admin .rt-dirty-tag {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: var(--rt-gold);
+  color: #102244;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  letter-spacing: 1px;
+  border-radius: 2px;
+}
+.rt-admin .rt-studio-clip audio { width: 100%; }
+
+.rt-admin .rt-help {
+  margin-top: 28px;
+  color: var(--rt-cream);
+  border-top: 2px dashed var(--rt-gold);
+  padding-top: 16px;
+}
+.rt-admin .rt-help summary {
+  cursor: pointer;
+  color: var(--rt-gold-hi);
+  font-weight: bold;
+  letter-spacing: 2px;
+  font-size: 13px;
+  padding: 6px 0;
+}
+.rt-admin .rt-help-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  margin-top: 8px;
+}
+.rt-admin .rt-help-table th,
+.rt-admin .rt-help-table td {
+  text-align: left;
+  padding: 4px 10px;
+  border-bottom: 1px solid rgba(255, 198, 49, 0.2);
+}
+.rt-admin .rt-help-table th { color: var(--rt-gold); }
+.rt-admin .rt-help-table code {
+  color: var(--rt-gold-hi);
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+/* ==========================================================
+   v56: new 4-slide cycle — weather map, facts, sign-off.
+   ========================================================== */
+
+/* ---- Weather map slide ---- */
+.rt-map-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(8px, 1.6vw, 24px);
+}
+.rt-map-svg {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  filter: drop-shadow(4px 4px 0 var(--rt-shadow));
+}
+.rt-map-city {
+  /* VT323 (not Press Start 2P) so the longest city name —
+     "SAN LUIS OBISPO" at 15 chars — comfortably fits the 238-wide
+     chip without clipping. Still reads as a retro CRT font. */
+  font-family: 'VT323', Monaco, monospace;
+  font-size: 24px;
+  fill: var(--rt-cream);
+  letter-spacing: 0.08em;
+}
+.rt-map-temp {
+  font-family: 'VT323', Monaco, monospace;
+  font-size: 30px;
+  fill: var(--rt-gold-hi);
+  letter-spacing: 0.08em;
+}
+
+/* ---- Rotating facts slide (ambient-pool flavored) ---- */
+.rt-fact-ambient {
+  position: relative;
+  /* v80/v82 — center the fact column, but don't let it exceed the
+     slide's visible height. The .rt-fact parent is a grid with
+     place-items:center and no intrinsic height limit, so a long body
+     used to push the bottom of the content under the crawl. Clamp
+     the height and the inner div's max-width here so long facts wrap
+     instead of running past the bottom edge. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+/* v83 — only target the fact CONTENT div (the one containing kicker +
+   headline + suffix + body), NOT the dots container. The dots div is
+   also a direct child of .rt-fact-ambient; if we apply flex-column to
+   it, the span dots stack vertically and bleed into the body text.
+   :not(.rt-fact-dots) keeps the dots on their original absolute-
+   positioned horizontal layout. */
+.rt-fact-ambient > div:not(.rt-fact-dots) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* v82 — use a wider column (60ch) so the body doesn't wrap to 6+
+     short lines. The body itself still has max-width:30ch via its own
+     rule for aesthetic line-length, but that rule on a wider parent
+     now lets the body breathe. */
+  width: 100%;
+  max-width: 60ch;
+  /* Keep the whole group visually compact so the bottom dots still
+     fit on-screen. */
+  max-height: 100%;
+  gap: 4px;
+}
+/* v82 — widen the body rule so long facts fit in the available
+   vertical space without wrapping at ~30ch (which produced the
+   "6 narrow lines" overflow). */
+.rt-fact-ambient .rt-fact-body {
+  max-width: 44ch;
+  font-size: clamp(22px, 2.4vw, 36px);
+  line-height: 1.2;
+}
+.rt-fact-headline {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(32px, 4.2vw, 72px);
+  color: var(--rt-gold);
+  text-shadow: 4px 4px 0 var(--rt-shadow);
+  margin: 12px 0 8px;
+  line-height: 1;
+  /* v80 — Press Start 2P is a strict uppercase bitmap font; when the
+     source fact has mixed-case words like "Point Arguello", the
+     lowercase glyphs fall through to the VT323 fallback, which has a
+     different glyph width. The mixed metrics push the visual center
+     of the line off from the true center of the container. Force
+     uppercase so every glyph renders in the primary font and the
+     line is exactly centered under the kicker / above the suffix. */
+  text-transform: uppercase;
+  text-align: center;
+}
+.rt-fact-suffix {
+  font-family: 'VT323', Monaco, monospace;
+  color: var(--rt-cream);
+  font-size: 0.45em;
+  letter-spacing: 0.08em;
+  margin-left: 8px;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+}
+/* v77 — block-level suffix sits on its own line below the big number.
+   Small-caps-esque uppercase with gold underline so it reads as the
+   topic label rather than part of the number. */
+.rt-fact-suffix-block {
+  font-family: 'VT323', Monaco, monospace;
+  color: var(--rt-cream);
+  font-size: clamp(20px, 2.1vw, 34px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  margin: 2px 0 18px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid rgba(255, 198, 49, 0.4);
+  display: inline-block;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+}
+/* v68 — progress dots live bottom-center, bigger and more prominent so
+   viewers can tell at a glance "1 of 3, 2 of 3, 3 of 3." */
+.rt-fact-dots {
+  position: absolute;
+  bottom: clamp(18px, 2.4vw, 36px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: clamp(14px, 1.6vw, 24px);
+  justify-content: center;
+  align-items: center;
+}
+.rt-fact-dot {
+  width: clamp(16px, 1.6vw, 24px);
+  height: clamp(16px, 1.6vw, 24px);
+  border-radius: 50%;
+  background: rgba(255, 198, 49, 0.22);
+  border: 2px solid rgba(255, 198, 49, 0.55);
+  box-shadow: inset 0 0 3px rgba(0, 0, 0, 0.5);
+  transition: background-color 200ms linear, box-shadow 200ms linear, transform 200ms ease-out;
+}
+.rt-fact-dot-on {
+  background: var(--rt-gold);
+  border-color: var(--rt-gold-hi);
+  box-shadow: 0 0 14px var(--rt-gold-hi), 0 0 4px var(--rt-cream), inset 0 0 3px var(--rt-cream);
+  transform: scale(1.15);
+}
+
+/* ---- Sign-off slide ---- */
+/* v68 — center the photo+text pair horizontally instead of pinning it to
+   the left edge with a 1fr text column. Using auto-auto columns with
+   justify-content:center keeps both elements at their natural width and
+   centers the whole group in the slide. */
+.rt-signoff {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: clamp(24px, 3vw, 56px);
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 2vw, 32px);
+  height: 100%;
+}
+/* v62 — bump sign-off photo + text slightly from the original size */
+.rt-signoff-face {
+  /* v62 bump: larger photo, still capped so it doesn't overflow on tall screens */
+  width: clamp(200px, 26vw, 380px);
+  height: auto;
+  border: 4px solid var(--rt-gold);
+  border-radius: 8px;
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  image-rendering: crisp-edges;
+  background: var(--rt-navy-deep);
+}
+.rt-signoff-text {
+  font-family: 'VT323', Monaco, monospace;
+  color: var(--rt-cream);
+  display: grid;
+  gap: 18px;
+}
+.rt-signoff-kicker {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  /* v62 bump */
+  font-size: clamp(18px, 2.2vw, 34px);
+  color: var(--rt-gold);
+  letter-spacing: 0.12em;
+  text-shadow: 3px 3px 0 var(--rt-shadow);
+  line-height: 1.3;
+}
+.rt-signoff-body {
+  /* v62 bump */
+  font-size: clamp(24px, 2.6vw, 44px);
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+}
+.rt-signoff-body em {
+  color: var(--rt-gold-hi);
+  font-style: normal;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+}
+
+/* ============================================================
+   v71 — Skit slide (Rocket News between-cycles video)
+   The skit plays inside the same TV chrome as other slides —
+   the header (VSFB-TV RETRO + CENTRAL COAST · ALL DAY + clock)
+   stays up above the stage and the ticker keeps crawling below.
+   Video is sized to fit the stage with letterboxing if the
+   source aspect ratio doesn't match 16:9.
+   ============================================================ */
+.rt-skit-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;         /* crucial: lets the video shrink in flex parent */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  border: 3px solid var(--rt-gold);
+  box-shadow: 6px 6px 0 var(--rt-shadow);
+  overflow: hidden;
+}
+.rt-skit-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* letterbox rather than crop */
+  display: block;
+  background: #000;
+}
+.rt-skit-placeholder {
+  width: 100%; height: 100%;
+  display: grid; place-items: center;
+  color: var(--rt-gold);
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  letter-spacing: 0.2em;
+  font-size: clamp(18px, 2.2vw, 34px);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(255,198,49,0.10) 0%, rgba(0,0,0,0) 60%),
+    #000;
+}
+.rt-skit-bug {
+  padding: 10px 18px;
+  border: 3px solid var(--rt-gold);
+  box-shadow: 4px 4px 0 var(--rt-shadow);
+  background: rgba(5, 17, 83, 0.65);
+}
+/* Lower-third episode badge overlaid on the video */
+.rt-skit-lower {
+  position: absolute;
+  left: clamp(12px, 2vw, 24px);
+  bottom: clamp(12px, 2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, rgba(5, 17, 83, 0.92) 0%, rgba(2, 10, 58, 0.92) 100%);
+  border: 2px solid var(--rt-gold);
+  border-left-width: 6px;
+  box-shadow: 4px 4px 0 var(--rt-shadow);
+  font-family: 'VT323', monospace;
+}
+.rt-skit-lower-kicker {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  color: var(--rt-gold);
+  font-size: clamp(10px, 1vw, 14px);
+  letter-spacing: 0.22em;
+}
+.rt-skit-lower-title {
+  color: var(--rt-cream);
+  font-size: clamp(16px, 1.8vw, 26px);
+  letter-spacing: 0.06em;
+}
+
+/* "Commercial in progress" badge — upper-right during skit playback.
+   Mimics a broadcast "LIVE" indicator so viewers know this is a break
+   and not part of the news. Pulsing red dot for extra TV-ness.
+   v75: sized up dramatically so it reads from the couch. */
+.rt-skit-commercial {
+  position: absolute;
+  top: clamp(16px, 2.5vw, 32px);
+  right: clamp(16px, 2.5vw, 32px);
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(10px, 1.3vw, 16px);
+  padding: clamp(10px, 1.4vw, 16px) clamp(18px, 2.2vw, 28px);
+  background: rgba(0, 0, 0, 0.78);
+  border: 4px solid var(--rt-gold);
+  color: var(--rt-cream);
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: clamp(16px, 2.1vw, 30px);
+  letter-spacing: 0.24em;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow: 5px 5px 0 var(--rt-shadow);
+  pointer-events: none;
+  z-index: 3;
+}
+.rt-skit-commercial-dot {
+  width:  clamp(14px, 1.5vw, 22px);
+  height: clamp(14px, 1.5vw, 22px);
+  border-radius: 50%;
+  background: #ff3030;
+  box-shadow: 0 0 14px rgba(255, 48, 48, 0.95);
+  animation: rt-skit-commercial-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rt-skit-commercial-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%      { opacity: 0.45; transform: scale(0.72); }
+}
+
+/* Admin page — skit slot cards */
+.rt-admin .rt-group-skits h2 { color: #ff9a6a; }
+.rt-skit-slot {
+  border: 2px solid rgba(255, 154, 106, 0.5);
+  background: rgba(12, 20, 40, 0.6);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border-radius: 4px;
+}
+.rt-skit-slot.rt-drag { background: rgba(255, 154, 106, 0.15); border-color: #ff9a6a; }
+.rt-skit-slot-hd {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap;
+}
+.rt-skit-slot-title {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 13px; color: var(--rt-gold-hi); letter-spacing: 0.15em;
+}
+.rt-skit-slot-ep {
+  font-family: 'VT323', monospace;
+  font-size: 16px; color: var(--rt-cream); opacity: 0.85;
+  margin-top: 2px;
+}
+.rt-skit-pill {
+  padding: 4px 10px; font-family: 'VT323', monospace; font-size: 13px;
+  letter-spacing: 0.1em; border-radius: 2px;
+}
+.rt-skit-pill-ok { background: rgba(54, 170, 54, 0.25); color: #b7f0b7; border: 1px solid #3ab13a; }
+.rt-skit-pill-missing { background: rgba(160, 160, 160, 0.15); color: #bfbfbf; border: 1px solid #555; }
+.rt-skit-preview {
+  background: #000;
+  border: 1px solid rgba(255, 198, 49, 0.4);
+  min-height: 120px;
+  max-height: 320px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.rt-skit-preview-video {
+  width: 100%; height: 100%; max-height: 320px;
+  object-fit: contain; display: block; background: #000;
+}
+.rt-skit-preview-empty {
+  color: #8fa5c8;
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  padding: 24px 12px;
+  text-align: center;
+}
+.rt-skit-slot-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.rt-skit-slot-actions button.primary {
+  color: #041a10; background: #5cce6a; border-color: #3ab13a;
+  font-weight: 700;
+}
+.rt-skit-slot-actions button.primary:hover:not(:disabled) {
+  background: #7ed68a;
+}
+
+/* v75 — per-skit broadcast volume slider. Sits between the preview
+   video and the upload buttons. Values below 100% attenuate, above
+   boost (via Web Audio gain on the kiosk). */
+.rt-skit-volume {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(255, 154, 106, 0.08);
+  border: 1px dashed rgba(255, 154, 106, 0.45);
+  border-radius: 4px;
+  font-family: 'VT323', monospace;
+}
+.rt-skit-volume-hd {
+  display: flex; justify-content: space-between; align-items: baseline;
+  color: #ffb489; letter-spacing: 0.1em; font-size: 15px;
+}
+.rt-skit-volume-label { font-weight: 700; }
+.rt-skit-volume-val { color: #ffe5cf; font-size: 18px; }
+.rt-skit-volume-slider {
+  width: 100%;
+  accent-color: #ff9a6a;
+  cursor: pointer;
+}
+.rt-skit-volume-ticks {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: #8d7e72; letter-spacing: 0.1em;
+}
+.rt-skit-volume-reset {
+  justify-self: start;
+  font-size: 12px; padding: 3px 8px;
+  margin-top: 2px;
+}
+
+/* ---- v57 upload-first admin ---- */
+.rt-admin .rt-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  margin-top: 12px;
+}
+.rt-admin .rt-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 14px;
+  background: transparent;
+  color: var(--rt-gold-hi);
+  border: 2px solid var(--rt-gold);
+  border-radius: 6px;
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 0.65em;
+  letter-spacing: 1px;
+  text-decoration: none;
+}
+.rt-admin .rt-link:hover { background: var(--rt-gold); color: var(--rt-navy-deep); }
+.rt-admin .rt-toast {
+  background: rgba(106, 240, 106, 0.12);
+  border: 1px solid #6af06a;
+  color: #baffba;
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-family: 'VT323', monospace;
+  letter-spacing: 0.04em;
+}
+.rt-uploader {
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 198, 49, 0.45);
+  border-radius: 8px;
+  padding: 14px 16px 16px;
+  display: grid;
+  gap: 12px;
+  position: relative;
+}
+.rt-uploader.rt-has { border-color: var(--rt-gold); }
+.rt-uploader.rt-dirty { box-shadow: inset 0 0 0 1px rgba(255, 198, 49, 0.6); }
+.rt-uploader.rt-extra { opacity: 0.8; border-style: dashed; }
+.rt-up-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rt-up-title {
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 0.85em;
+  color: var(--rt-gold);
+  letter-spacing: 0.12em;
+  text-shadow: 2px 2px 0 var(--rt-shadow);
+}
+.rt-up-id {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--rt-gold-hi);
+  font-family: 'VT323', monospace;
+  font-size: 0.95em;
+}
+.rt-up-sub {
+  color: var(--rt-cream);
+  opacity: 0.85;
+  font-family: 'VT323', monospace;
+  font-size: 0.95em;
+  margin-top: 4px;
+}
+.rt-up-status { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.rt-pill {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-family: 'VT323', monospace;
+  font-size: 0.9em;
+  letter-spacing: 0.04em;
+}
+.rt-pill-have { background: rgba(106, 240, 106, 0.15); color: #baffba; border: 1px solid #6af06a; }
+.rt-pill-empty { background: rgba(255, 198, 49, 0.08); color: var(--rt-cream); border: 1px solid rgba(255, 198, 49, 0.4); }
+.rt-up-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.rt-up-script, .rt-up-drop, .rt-up-live {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed rgba(255, 198, 49, 0.35);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.rt-up-script label, .rt-up-live label {
+  display: block;
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 0.55em;
+  letter-spacing: 0.14em;
+  color: var(--rt-gold-hi);
+  margin-bottom: 6px;
+}
+.rt-up-script textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--rt-cream);
+  border: 1px solid rgba(255, 198, 49, 0.3);
+  border-radius: 4px;
+  padding: 8px;
+  font-family: 'VT323', Monaco, monospace;
+  font-size: 1.05em;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  resize: vertical;
+}
+.rt-up-script textarea:focus { outline: 2px solid var(--rt-gold); border-color: transparent; }
+.rt-up-cue {
+  margin-top: 6px;
+  color: var(--rt-cream);
+  font-family: 'VT323', monospace;
+  font-size: 0.95em;
+  opacity: 0.75;
+}
+.rt-up-cue em { color: var(--rt-gold-hi); font-style: normal; }
+.rt-dirty-tag {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 7px;
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 0.55em;
+  letter-spacing: 0.12em;
+  color: var(--rt-navy-deep);
+  background: var(--rt-gold);
+  border-radius: 3px;
+}
+.rt-up-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  min-height: 150px;
+}
+.rt-up-drop-have { border-style: solid; border-color: var(--rt-gold); }
+.rt-up-drop-hint {
+  color: var(--rt-cream);
+  opacity: 0.7;
+  font-family: 'VT323', monospace;
+  font-size: 1em;
+  letter-spacing: 0.04em;
+}
+.rt-up-drop audio { width: 100%; max-width: 320px; }
+.rt-up-filename {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--rt-cream);
+  font-family: 'VT323', monospace;
+  font-size: 0.95em;
+}
+.rt-up-filename strong { color: var(--rt-gold-hi); letter-spacing: 0.02em; }
+.rt-up-drop-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.rt-up-btn-primary {
+  background: var(--rt-gold) !important;
+  color: var(--rt-navy-deep) !important;
+  border-color: var(--rt-gold-hi) !important;
+}
+.rt-up-btn-primary:hover { background: var(--rt-gold-hi) !important; }
+.rt-up-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 198, 49, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.rt-up-progress > div {
+  height: 100%;
+  background: var(--rt-gold);
+  transition: width 120ms linear;
+}
+.rt-up-live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rt-up-live audio { width: 100%; max-width: 520px; }
+.rt-up-live-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.rt-admin button.ghost {
+  background: transparent;
+  color: var(--rt-cream);
+  border-color: rgba(255, 198, 49, 0.5);
+}
+.rt-admin button.danger { color: #ffb3b3; border-color: rgba(255, 100, 100, 0.6); }
+.rt-admin button.ghost.danger:hover { background: rgba(255, 100, 100, 0.15); }
+
+/* ---- Mobile tweak ---- */
+@media (max-width: 720px) {
+  .rt-launch-hero { grid-template-columns: 1fr; }
+  .rt-forecast    { grid-template-columns: repeat(2, 1fr); }
+  .rt-panels.rt-cols-3, .rt-panels.rt-cols-2 { grid-template-columns: 1fr; }
+  .rt-admin .rt-slot-hd,
+  .rt-admin .rt-studio-row { grid-template-columns: 1fr; }
+  .rt-signoff { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .rt-map-city { font-size: 20px; }
+  .rt-map-temp { font-size: 26px; }
+  .rt-up-body { grid-template-columns: 1fr; }
+  .rt-up-head { flex-direction: column; }
+  .rt-up-status { align-items: flex-start; }
+}
+
+/* ============================================================
+   v69 — PHONE layout for /retro
+   Targets iPhones (narrow widths) in both portrait and landscape.
+   The kiosk is designed for a 16:9 TV — the rules below reflow
+   the slides so they're readable on a 390–430px viewport and
+   also work when the phone is turned sideways (~844×390).
+   ============================================================ */
+
+/* Common phone tweaks — portrait or landscape under 900px wide */
+@media (max-width: 900px) {
+  /* Respect the notch on newer iPhones. The frame covers the entire
+     viewport (inset: 0) so we have to add safe-area padding manually. */
+  .rt-frame {
+    padding:
+      calc(clamp(12px, 3vw, 18px) + env(safe-area-inset-top, 0px))
+      calc(clamp(12px, 3vw, 18px) + env(safe-area-inset-right, 0px))
+      calc(var(--rt-crawl-h) + clamp(10px, 2vw, 16px) + env(safe-area-inset-bottom, 0px))
+      calc(clamp(12px, 3vw, 18px) + env(safe-area-inset-left, 0px));
+  }
+
+  /* Header: stack logo+clock vertically so neither gets cut off, and
+     tighten the font sizes so the whole header takes ~60px not ~140. */
+  .rt-header {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    border-bottom-width: 3px;
+  }
+  .rt-header .rt-logo { font-size: 11px; letter-spacing: 1px; }
+  .rt-header .rt-logo small { font-size: 9px; letter-spacing: 2px; margin-top: 1px; }
+  .rt-header .rt-clock { font-size: 18px; text-align: right; }
+  .rt-header .rt-clock .rt-date { font-size: 9px; letter-spacing: 2px; }
+
+  /* Slide chrome scales down */
+  .rt-slide { padding: 8px 4px; gap: 8px; }
+  .rt-slide-title {
+    font-size: 11px;
+    padding: 6px 10px;
+    letter-spacing: 2px;
+    border-bottom-width: 3px;
+    box-shadow: 3px 3px 0 var(--rt-shadow);
+  }
+
+  /* Crawl shrinks. The clamp in :root already gives 36px minimum, but
+     that's fine for iPhone — we just tighten the inner font. */
+  .rt-crawl-inner { animation-duration: 55s; }
+
+  /* --- Weather map: let it use the full stage even in portrait --- */
+  .rt-map-svg { max-height: none; height: 100%; }
+
+  /* --- Upcoming launches: stack hero rocket + text, shrink sub-rows --- */
+  .rt-launch-primary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 8px;
+    text-align: center;
+    justify-items: center;
+  }
+  .rt-launch-primary-icon { width: 54px; }
+  .rt-launch-primary-body { justify-items: center; }
+  .rt-launch-primary-body .rt-mission   { font-size: 16px; letter-spacing: 1px; }
+  .rt-launch-primary-body .rt-rocket-name { font-size: 13px; letter-spacing: 2px; }
+  .rt-launch-primary-body .rt-primary-meta { font-size: 12px; justify-content: center; }
+  .rt-launch-primary-body .rt-tminus { font-size: 26px; }
+
+  .rt-launch-row {
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .rt-launch-row-icon { width: 26px; }
+  .rt-launch-row-mission { font-size: 13px; letter-spacing: 1px; }
+  .rt-launch-row-sub { font-size: 11px; letter-spacing: 0.5px; }
+  /* The "when" column moves under the main info so date strings don't
+     wrap weirdly. Keep it visible but smaller. */
+  .rt-launch-row-when {
+    grid-column: 1 / -1;
+    text-align: left;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-top: 2px;
+    padding-left: 34px; /* line up with rocket icon */
+  }
+
+  /* --- Facts slide --- */
+  .rt-fact { padding: 14px 10px; }
+  .rt-fact .rt-fact-kicker { font-size: 10px; margin-bottom: 8px; letter-spacing: 2px; }
+  .rt-fact-headline { font-size: 24px; margin: 6px 0 4px; }
+  .rt-fact-suffix   { font-size: 0.5em; letter-spacing: 0.04em; }
+  .rt-fact .rt-fact-body { font-size: 16px; max-width: none; line-height: 1.3; }
+  /* Dots: since the slide padding is small, bring them up a bit */
+  .rt-fact-dots { bottom: 10px; gap: 10px; }
+  .rt-fact-dot  { width: 14px; height: 14px; border-width: 1.5px; }
+
+  /* --- Sign-off: stack portrait + text vertically, center everything --- */
+  .rt-signoff {
+    grid-template-columns: 1fr;
+    justify-content: center;
+    justify-items: center;
+    text-align: center;
+    gap: 14px;
+    padding: 10px;
+  }
+  .rt-signoff-face { width: clamp(120px, 40vw, 180px); border-width: 3px; box-shadow: 4px 4px 0 var(--rt-shadow); }
+  .rt-signoff-text { gap: 10px; justify-items: center; }
+  .rt-signoff-kicker { font-size: 13px; letter-spacing: 0.08em; }
+  .rt-signoff-body   { font-size: 18px; line-height: 1.3; }
+
+  /* Map chip text scales down on phone */
+  .rt-map-city { font-size: 17px; }
+  .rt-map-temp { font-size: 22px; }
+
+  /* Gate button: bigger tap target on phone */
+  .rt-gate button {
+    font-size: clamp(14px, 4.5vw, 22px);
+    padding: 14px 22px;
+  }
+}
+
+/* ---- Portrait-specific — under 520px wide ----
+   (iPhone 12/13/14/15 are 390 or 393 CSS px wide in portrait) */
+@media (max-width: 520px) and (orientation: portrait) {
+  /* Smaller CRT + scanline intensity so the effects don't overpower
+     the already-small text. */
+  :root { --rt-scan-alpha: 0.22; }
+  .rt-tracking { opacity: 0.35; }
+  .rt-crt { box-shadow: inset 0 0 40px rgba(0,0,0,0.55), inset 0 0 100px rgba(0,0,20,0.45); }
+  /* Disable the wobble on phones — it's a TV joke that reads as
+     "broken rendering" on a handheld. */
+  .rt-wobble { animation: none !important; }
+}
+
+/* ---- Landscape phones ----
+   iPhones in landscape are roughly 844×390 to 932×430. The frame needs
+   a tighter vertical layout since height is now the scarce dimension. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .rt-frame {
+    padding:
+      calc(6px + env(safe-area-inset-top, 0px))
+      calc(14px + env(safe-area-inset-right, 0px))
+      calc(var(--rt-crawl-h) + 4px + env(safe-area-inset-bottom, 0px))
+      calc(14px + env(safe-area-inset-left, 0px));
+  }
+  /* Compact header — single row, small font */
+  .rt-header {
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    border-bottom-width: 2px;
+  }
+  .rt-header .rt-logo        { font-size: 10px; letter-spacing: 1px; }
+  .rt-header .rt-logo small  { display: none; } /* "CENTRAL COAST · ALL DAY" is redundant here */
+  .rt-header .rt-clock       { font-size: 15px; }
+  .rt-header .rt-clock .rt-date { font-size: 8px; letter-spacing: 1.5px; }
+
+  .rt-slide { padding: 4px; gap: 4px; }
+  .rt-slide-title {
+    font-size: 10px;
+    padding: 4px 8px;
+    letter-spacing: 1.5px;
+  }
+
+  /* Side-by-side again for sign-off, but compact */
+  .rt-signoff { grid-template-columns: auto auto; gap: 16px; padding: 6px; }
+  .rt-signoff-face { width: clamp(90px, 24vw, 140px); }
+  .rt-signoff-text { gap: 6px; }
+  .rt-signoff-kicker { font-size: 11px; }
+  .rt-signoff-body { font-size: 14px; }
+
+  /* Map — restore height cap (landscape has enough width) */
+  .rt-map-svg { max-height: 62vh; }
+
+  /* Facts — shrink more aggressively since vertical is tight */
+  .rt-fact-headline { font-size: 20px; }
+  .rt-fact .rt-fact-body { font-size: 14px; }
+  .rt-fact-dots { bottom: 4px; gap: 8px; }
+  .rt-fact-dot  { width: 11px; height: 11px; }
+
+  /* Launch primary: put rocket icon beside body again since width allows */
+  .rt-launch-primary {
+    grid-template-columns: auto 1fr;
+    text-align: left;
+    justify-items: stretch;
+    padding: 6px 8px;
+    gap: 12px;
+  }
+  .rt-launch-primary-body { justify-items: start; }
+  .rt-launch-primary-body .rt-mission { font-size: 14px; }
+  .rt-launch-primary-body .rt-tminus  { font-size: 22px; }
+  .rt-launch-primary-icon { width: 44px; }
+
+  /* Reduce wobble/jitter footprint */
+  .rt-wobble { animation: none !important; }
+}
+
+
+/* ---- Audio debug overlay (enabled via ?debug=1) ---- */
+.rt-debug-audio {
+  position: fixed;
+  left: 14px;
+  bottom: 70px;
+  z-index: 9999;
+  padding: 10px 14px;
+  background: rgba(10, 10, 28, 0.88);
+  color: #ffe47a;
+  font-family: 'VT323', Monaco, monospace;
+  font-size: 18px;
+  line-height: 1.3;
+  border: 2px solid #ffc631;
+  border-radius: 4px;
+  letter-spacing: 0.08em;
+  min-width: 280px;
+  pointer-events: none;
+}
+.rt-debug-audio strong {
+  display: block;
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 11px;
+  color: #ff9a6a;
+  margin-bottom: 6px;
+  letter-spacing: 0.15em;
+}
+.rt-debug-audio div { white-space: pre; }
+
+/* ---- v67 admin: slide-group headings + in-browser recorder ---- */
+.rt-admin .rt-group {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(255, 198, 49, 0.25);
+}
+.rt-admin .rt-group:first-of-type { margin-top: 12px; border-top: none; padding-top: 0; }
+.rt-admin .rt-group-head {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: rgba(12, 26, 99, 0.55);
+  border: 1px solid rgba(255, 198, 49, 0.35);
+  border-radius: 4px;
+}
+.rt-admin .rt-group-head h2 {
+  margin: 0;
+  font-family: 'Press Start 2P', 'VT323', monospace;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  color: var(--rt-gold);
+}
+.rt-admin .rt-group-sub {
+  margin-top: 6px;
+  color: var(--rt-cream);
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  opacity: 0.9;
+}
+.rt-admin .rt-group-cue {
+  margin-top: 4px;
+  color: var(--rt-cream);
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  opacity: 0.78;
+}
+.rt-admin .rt-group-cue em { color: var(--rt-gold-hi); font-style: normal; }
+
+/* RECORD TAKE primary button on an empty slot */
+.rt-admin .rt-up-btn-rec {
+  background: #c42121 !important;
+  color: #fff !important;
+  border-color: #ffafaf !important;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+}
+.rt-admin .rt-up-btn-rec:hover { background: #e13333 !important; }
+
+/* STOP while recording */
+.rt-admin .rt-rec-stop {
+  background: #c42121 !important;
+  color: #fff !important;
+  border-color: #ffafaf !important;
+}
+.rt-admin .rt-rec-stop:hover { background: #e13333 !important; }
+
+/* Live-recording indicator — red blinking dot + timer */
+.rt-rec-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #ffb3b3;
+  font-family: 'VT323', monospace;
+  font-size: 22px;
+  letter-spacing: 0.12em;
+}
+.rt-rec-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff2a2a;
+  box-shadow: 0 0 8px rgba(255, 42, 42, 0.9);
+  animation: rt-rec-blink 0.9s ease-in-out infinite;
+}
+@keyframes rt-rec-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.25; }
+}
+.rt-rec-err {
+  margin-top: 6px;
+  color: #ffb3b3;
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+}
+
+/* ======================================================================
+ * v76 — Metal Gear Solid codec portrait card
+ * ----------------------------------------------------------------------
+ * A character portrait slides in from the right when a narration clip
+ * plays and slides out when it ends. Positioned in the upper-right of
+ * the .rt-stage (the big canvas inside the TV frame). Uses transform
+ * rather than right/left transitions so it runs on the GPU.
+ * ==================================================================== */
+.rt-codec {
+  position: absolute;
+  top: clamp(12px, 1.8vh, 24px);
+  right: clamp(12px, 1.8vw, 28px);
+  z-index: 9;
+  width: clamp(180px, 18vw, 260px);
+  pointer-events: none;
+  /* start off-screen to the right; the -on class slides us in */
+  transform: translateX(120%) scale(0.96);
+  opacity: 0;
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1.2, 0.36, 1),
+    opacity   0.35s ease-out;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+.rt-codec-on {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+}
+.rt-codec-off {
+  transform: translateX(120%) scale(0.96);
+  opacity: 0;
+}
+
+.rt-codec-frame {
+  position: relative;
+  padding: 4px;
+  background: linear-gradient(180deg, #0c2a12 0%, #061a08 100%);
+  border: 2px solid #7affb3;
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px rgba(122, 255, 179, 0.3),
+    0 0 16px rgba(122, 255, 179, 0.35);
+  overflow: hidden;
+}
+
+.rt-codec-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  filter:
+    saturate(0.95)
+    contrast(1.05)
+    brightness(1.02);
+}
+
+/* Subtle moving scanlines over the portrait — the characteristic
+ * codec-call CRT shimmer. */
+.rt-codec-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(122, 255, 179, 0.06) 3px,
+    rgba(122, 255, 179, 0.0) 4px
+  );
+  mix-blend-mode: screen;
+  animation: rt-codec-scan-move 4s linear infinite;
+}
+@keyframes rt-codec-scan-move {
+  from { background-position: 0 0; }
+  to   { background-position: 0 120px; }
+}
+
+/* Frequency + name strip below the portrait — tiny codec readout. */
+.rt-codec-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 3px 8px;
+  background: rgba(6, 20, 10, 0.85);
+  border: 1px solid #7affb3;
+  border-radius: 2px;
+  font-family: 'VT323', monospace;
+  color: #b7ffcf;
+  letter-spacing: 0.14em;
+  text-shadow: 0 0 6px rgba(122, 255, 179, 0.6);
+}
+.rt-codec-freq {
+  font-size: clamp(11px, 1.1vw, 15px);
+  color: #7affb3;
+}
+.rt-codec-name {
+  font-size: clamp(13px, 1.35vw, 18px);
+  font-weight: bold;
+}
+
+/* ======================================================================
+ * v77 — per-take portrait picker inside the admin SlotUploader
+ * ==================================================================== */
+.rt-up-portrait {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 2px dashed rgba(122, 255, 179, 0.35);
+}
+.rt-up-portrait > label {
+  display: block;
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: #7affb3;
+  margin-bottom: 6px;
+}
+.rt-up-portrait-hint {
+  margin-left: 8px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+.rt-up-portrait-drop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: rgba(0, 20, 8, 0.35);
+  border: 1.5px dashed rgba(122, 255, 179, 0.5);
+  border-radius: 4px;
+}
+.rt-up-portrait-drop.rt-up-portrait-have {
+  border-style: solid;
+  border-color: #7affb3;
+  background: rgba(0, 40, 16, 0.45);
+}
+.rt-up-portrait-img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  background: #000;
+  border: 2px solid #7affb3;
+  border-radius: 3px;
+  image-rendering: pixelated;
+}
+.rt-up-portrait-empty {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px dashed rgba(122, 255, 179, 0.35);
+  border-radius: 3px;
+  font-family: 'VT323', monospace;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: rgba(122, 255, 179, 0.6);
+  text-align: center;
+}
+.rt-up-portrait-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+.rt-up-portrait-actions button { width: 100%; }
+.rt-up-portrait .rt-meta { width: 100%; }
+

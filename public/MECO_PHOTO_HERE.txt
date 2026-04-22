@@ -1,0 +1,4 @@
+The MECO dog easter-egg expects a photo named meco.jpg in this folder.
+
+Drop your Yorkshire Terrier photo here and name it meco.jpg, then rebuild.
+Until the file is present, the rail simply shows the text "MECO" as before.

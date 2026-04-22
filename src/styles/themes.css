@@ -1,0 +1,203 @@
+/* Themes — applied via data-theme attribute on <html> */
+
+:root[data-theme="tokyo-storm"] {
+  --bg: #24283b;
+  --fg: #a9b1d6;
+  --border: #414868;
+  --accent1: #bb9af7;   /* purple */
+  --accent2: #7dcfff;   /* cyan */
+  --accent3: #9ece6a;   /* green (success) */
+  --accent4: #e0af68;   /* amber */
+  --dim: #565f89;
+  --warn: #f7768e;
+}
+
+:root[data-theme="gruvbox"] {
+  --bg: #282828;
+  --fg: #ebdbb2;
+  --border: #504945;
+  --accent1: #fe8019;   /* orange */
+  --accent2: #fabd2f;   /* yellow */
+  --accent3: #b8bb26;   /* green */
+  --accent4: #d3869b;   /* pink */
+  --dim: #7c6f64;
+  --warn: #fb4934;
+}
+
+:root[data-theme="dracula"] {
+  --bg: #282a36;
+  --fg: #f8f8f2;
+  --border: #44475a;
+  --accent1: #ff79c6;   /* pink */
+  --accent2: #8be9fd;   /* cyan */
+  --accent3: #50fa7b;   /* green */
+  --accent4: #f1fa8c;   /* yellow */
+  --dim: #6272a4;
+  --warn: #ff5555;
+}
+
+:root[data-theme="nord"] {
+  --bg: #2e3440;
+  --fg: #d8dee9;
+  --border: #434c5e;
+  --accent1: #88c0d0;   /* frost */
+  --accent2: #81a1c1;   /* steel */
+  --accent3: #a3be8c;   /* aurora green */
+  --accent4: #ebcb8b;   /* aurora yellow */
+  --dim: #4c566a;
+  --warn: #bf616a;
+}
+
+:root[data-theme="matrix"] {
+  --bg: #0d0208;
+  --fg: #008f11;
+  --border: #005c08;
+  --accent1: #00ff41;
+  --accent2: #39ff70;
+  --accent3: #7fff9f;
+  --accent4: #00ff41;
+  --dim: #004d08;
+  --warn: #ff0055;
+}
+
+/* Catppuccin Mocha — bonus theme, another btop favorite */
+:root[data-theme="catppuccin"] {
+  --bg: #1e1e2e;
+  --fg: #cdd6f4;
+  --border: #45475a;
+  --accent1: #cba6f7;   /* mauve */
+  --accent2: #89dceb;   /* sky */
+  --accent3: #a6e3a1;   /* green */
+  --accent4: #f9e2af;   /* yellow */
+  --dim: #6c7086;
+  --warn: #f38ba8;
+}
+
+/* Solarized dark — utility theme for readability */
+:root[data-theme="solarized"] {
+  --bg: #002b36;
+  --fg: #93a1a1;
+  --border: #073642;
+  --accent1: #268bd2;
+  --accent2: #2aa198;
+  --accent3: #859900;
+  --accent4: #b58900;
+  --dim: #586e75;
+  --warn: #dc322f;
+}
+
+/* ============================================================================
+ * POLISHED LAYOUT THEMES
+ *
+ * These override the base `--bg/--fg/--accent*` custom properties only when
+ * the polished cinematic layout is active. Scoping via the compound selector
+ * `[data-layout="polished"][data-polished-theme="..."]` means the terminal
+ * layout is never affected, and the 7-theme picker for terminal stays intact.
+ *
+ * Each theme also defines a handful of polished-only variables (prefixed
+ * `--ap-*`) that drive the hero gradient, card glass tint, and photo overlay
+ * scrim. AmbientPolishedLayout.jsx + base.css reference these so we can give
+ * each palette a genuinely different mood rather than just swapping accents.
+ * ========================================================================= */
+
+/* COSMIC DUSK — the v34 default. Deep navy with magenta/cyan accents, no
+ * purple overlay. Designed to pair with the launch-pad-at-dusk hero imagery
+ * shown in Josh's mockup. This is the "ship it" baseline palette. */
+:root[data-layout="polished"][data-polished-theme="cosmic-dusk"] {
+  --bg: #0a0f1e;
+  --fg: #e6edf7;
+  --border: rgba(140, 160, 200, 0.22);
+  --accent1: #ff2e87;   /* hot magenta */
+  --accent2: #4fd1ff;   /* electric cyan */
+  --accent3: #7dffbb;   /* launch-go green */
+  --accent4: #ffcf66;   /* flame amber */
+  --dim: #6b7897;
+  --warn: #ff6060;
+  /* v35 strict spec: left = dark blue/black → right = subtle magenta glow.
+   * No radial "blob" gradients. Keep it clean and cinematic. */
+  --ap-hero-grad: linear-gradient(90deg, #0b1020 0%, #1a1f3a 55%, #2a1f3a 100%);
+  --ap-card-tint: rgba(10, 15, 30, 0.6);
+  --ap-scrim: linear-gradient(180deg, rgba(10, 15, 30, 0) 0%, rgba(10, 15, 30, 0.65) 75%, rgba(10, 15, 30, 0.92) 100%);
+}
+
+/* AURORA — teal/violet shimmer, calmer than cosmic-dusk. */
+:root[data-layout="polished"][data-polished-theme="aurora"] {
+  --bg: #061b24;
+  --fg: #e4f1f4;
+  --border: rgba(120, 200, 220, 0.22);
+  --accent1: #6be6d1;
+  --accent2: #a87bff;
+  --accent3: #b6ff7a;
+  --accent4: #ffd76b;
+  --dim: #6b8d95;
+  --warn: #ff8095;
+  --ap-hero-grad: linear-gradient(90deg, #041a1f 0%, #0a2833 55%, #173344 100%);
+  --ap-card-tint: rgba(10, 30, 38, 0.6);
+  --ap-scrim: linear-gradient(180deg, rgba(6, 27, 36, 0) 0%, rgba(6, 27, 36, 0.7) 100%);
+}
+
+/* EMBER — sunset orange with warm amber. Matches ASDS recovery vibes. */
+:root[data-layout="polished"][data-polished-theme="ember"] {
+  --bg: #1a0c0a;
+  --fg: #f5e8dc;
+  --border: rgba(230, 150, 90, 0.22);
+  --accent1: #ff7a3d;
+  --accent2: #ffcf66;
+  --accent3: #ffe27a;
+  --accent4: #ff5c5c;
+  --dim: #8c6f63;
+  --warn: #ff4d4d;
+  --ap-hero-grad: linear-gradient(90deg, #140605 0%, #2a1208 55%, #3a1f0c 100%);
+  --ap-card-tint: rgba(38, 18, 12, 0.6);
+  --ap-scrim: linear-gradient(180deg, rgba(26, 12, 10, 0) 0%, rgba(26, 12, 10, 0.72) 100%);
+}
+
+/* MIDNIGHT OPS — near-black, minimal color, NASA/SpaceX mission-control feel.
+ * Good for true-blackout kiosks and OLED displays. */
+:root[data-layout="polished"][data-polished-theme="midnight-ops"] {
+  --bg: #05070b;
+  --fg: #e2e8f0;
+  --border: rgba(120, 150, 180, 0.18);
+  --accent1: #4fd1ff;
+  --accent2: #7dffbb;
+  --accent3: #ffcf66;
+  --accent4: #e5e5e5;
+  --dim: #4a5568;
+  --warn: #ff5050;
+  --ap-hero-grad: linear-gradient(90deg, #03050a 0%, #080d18 55%, #0c1424 100%);
+  --ap-card-tint: rgba(8, 12, 22, 0.65);
+  --ap-scrim: linear-gradient(180deg, rgba(5, 7, 11, 0) 0%, rgba(5, 7, 11, 0.85) 100%);
+}
+
+/* GRAPHITE — charcoal + bright red accent. High-contrast utilitarian look. */
+:root[data-layout="polished"][data-polished-theme="graphite"] {
+  --bg: #151517;
+  --fg: #eeeeef;
+  --border: rgba(220, 220, 225, 0.18);
+  --accent1: #ff3b4b;
+  --accent2: #cccccc;
+  --accent3: #7dffbb;
+  --accent4: #ffcf66;
+  --dim: #7a7a80;
+  --warn: #ff5050;
+  --ap-hero-grad: linear-gradient(90deg, #0e0e10 0%, #18181c 55%, #222228 100%);
+  --ap-card-tint: rgba(22, 22, 26, 0.6);
+  --ap-scrim: linear-gradient(180deg, rgba(21, 21, 23, 0) 0%, rgba(21, 21, 23, 0.8) 100%);
+}
+
+/* SUNRISE — Southern California morning pad ops. Lighter background,
+ * peachy/amber accents. Good for daytime demos at events. */
+:root[data-layout="polished"][data-polished-theme="sunrise"] {
+  --bg: #1c1622;
+  --fg: #fff0e0;
+  --border: rgba(255, 200, 150, 0.22);
+  --accent1: #ff9a6c;
+  --accent2: #ffd76b;
+  --accent3: #b6ff7a;
+  --accent4: #ff5c9c;
+  --dim: #8a7a85;
+  --warn: #ff6060;
+  --ap-hero-grad: linear-gradient(90deg, #1a1220 0%, #2d1d32 55%, #3a253f 100%);
+  --ap-card-tint: rgba(32, 22, 38, 0.6);
+  --ap-scrim: linear-gradient(180deg, rgba(28, 22, 34, 0) 0%, rgba(28, 22, 34, 0.72) 100%);
+}

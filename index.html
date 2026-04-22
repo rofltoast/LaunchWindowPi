@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets the app paint into the iPhone notch/safe-area
+         inset. maximum-scale + user-scalable=no prevents iOS from autozooming
+         on input focus (we have no inputs but the font-size is small enough
+         that iOS can interpret a double-tap as a zoom request). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <!-- iOS: match the kiosk background in Safari status bar / home-screen
+         web app chrome so there's no white flash on launch. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0a0e14" />
+    <title>VSFB Launch Monitor</title>
+    <!-- Preconnect to the JetBrains Mono CDN — iPhone defaults to its own
+         monospace (SF Mono/Menlo) which is fine but not as crisp with our
+         accent colors. Loading a real webfont makes the UI look consistent
+         across Pi/iPhone/desktop. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+    <link rel="preconnect" href="https://ll.thespacedevs.com" />
+    <link rel="preconnect" href="https://api.flightclub.io" />
+    <link rel="preconnect" href="https://api.open-meteo.com" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
