@@ -33,6 +33,8 @@ import { clipUrl } from './slots.js';
 export function useNarration(bedUrl) {
   const ctxRef = useRef(null);
   const bedElRef = useRef(null);
+  // v85 — decoded AudioBufferSourceNode for the music bed.
+  const bedBufSrcRef = useRef(null);
   const bedGainRef = useRef(null);
   const narGainRef = useRef(null);
 
@@ -46,6 +48,7 @@ export function useNarration(bedUrl) {
   const [debugLog, setDebugLog] = useState(/** @type {string[]} */([]));
 
   useEffect(() => () => {
+    try { bedBufSrcRef.current?.stop?.(); } catch {}
     try { bedElRef.current?.pause?.(); } catch {}
     try { ctxRef.current?.close?.(); } catch {}
     Object.values(cacheRef.current).forEach(({ el }) => {
@@ -59,19 +62,24 @@ export function useNarration(bedUrl) {
     if (!AC) return;
     const ctx = new AC();
     ctxRef.current = ctx;
+    // Resume if created in 'suspended' state (headless Chrome sometimes
+    // does this under --autoplay-policy even though the policy says no
+    // gesture required). Without this, the audio graph connects but
+    // produces zero samples to Pulse. Belt-and-suspenders.
+    try { if (ctx.state === 'suspended') await ctx.resume(); } catch {}
 
-    // Music bed (streamed <audio> element — native looping, no memory
-    // balloon). Starts immediately; no clip preloading gating it.
-    const bed = new Audio(bedUrl);
-    bed.loop = true;
-    bed.crossOrigin = 'anonymous';
-    bed.preload = 'auto';
-    bed.volume = 1.0;
-    const bedSrc = ctx.createMediaElementSource(bed);
+    // Music bed — v85: decoded AudioBufferSourceNode, not
+    // MediaElementSource. The old <audio>+MES path silently failed on
+    // the Hetzner headless streamer: play() resolved OK, Pulse opened
+    // a sink input, but zero samples ever flowed. We saw ~3s of voice
+    // clips hit the monitor cleanly, then dead silence in the gaps —
+    // the bed was attached to the graph but never actually driving
+    // samples through it, despite being "playing". AudioBufferSource
+    // bypasses MediaElement's autoplay/activation interaction entirely:
+    // once start() is called on a decoded buffer, it runs until stop().
     const bedGain = ctx.createGain();
     bedGain.gain.value = 0.45;
-    bedSrc.connect(bedGain).connect(ctx.destination);
-    bedElRef.current = bed;
+    bedGain.connect(ctx.destination);
     bedGainRef.current = bedGain;
 
     const narGain = ctx.createGain();
@@ -79,9 +87,30 @@ export function useNarration(bedUrl) {
     narGain.connect(ctx.destination);
     narGainRef.current = narGain;
 
-    try { await bed.play(); setMusicReady(true); } catch (e) {
-      console.warn('[retro] bed play blocked:', e);
-    }
+    // Fetch + decode the bed in the background, then start it. We
+    // don't await this before returning — that would delay begin() by
+    // however long the bed takes to download. Voice clips can fire
+    // immediately; the bed will fade in as soon as the buffer decodes.
+    (async () => {
+      try {
+        const resp = await fetch(bedUrl, { cache: 'force-cache' });
+        const arr = await resp.arrayBuffer();
+        const buf = await ctx.decodeAudioData(arr);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.connect(bedGain);
+        src.start(0);
+        bedBufSrcRef.current = src;
+        // `bedEl` is kept for API compatibility (paused check etc).
+        // For the new path, we fake it with an object that mirrors the
+        // minimal surface the rest of this hook touches.
+        bedElRef.current = { paused: false, play: () => Promise.resolve() };
+        setMusicReady(true);
+      } catch (e) {
+        console.warn('[retro] bed decode/start failed:', e);
+      }
+    })();
   }, [bedUrl]);
 
   // Get or create the cached <audio> element for a slot. Returns null
@@ -130,6 +159,14 @@ export function useNarration(bedUrl) {
       const ctx = ctxRef.current;
       const bedGain = bedGainRef.current;
       if (!ctx || !bedGain) return false;
+
+      // v85 — music bed is an AudioBufferSourceNode now, started
+      // from begin(). No per-clip recovery kick needed; if the buffer
+      // didn't decode/start we'll see it in console and the gain node
+      // stays at whatever level we set. Keeping a resume() guard for
+      // the AudioContext in case it suspended mid-life (tab hidden,
+      // etc.) — cheap to call when already running.
+      try { if (ctx.state === 'suspended') await ctx.resume(); } catch {}
 
       const entry = await ensureClip(slot);
       if (!entry) {
