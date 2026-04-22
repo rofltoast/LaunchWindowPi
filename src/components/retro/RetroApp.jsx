@@ -919,39 +919,26 @@ function RotatingFactsSlide({ active, facts, perCycleMs, perCycleCount }) {
   const pick = deck[idx] ?? 0;
   const fact = facts[pick] || facts[0] || { headline: '—', body: '', category: '' };
 
-  // v86 — measure the content block and auto-shrink font if it would
-  // overflow the slide area (the area ABOVE the dots footer). We leave
-  // the dots container alone — they keep their CSS-driven size and
-  // position so the footer looks identical to v83. Strategy:
-  //   1. Set a CSS custom property --fact-scale on the content wrapper.
-  //   2. After each render, if scrollHeight > clientHeight (i.e. the
-  //      text block is taller than its container), drop --fact-scale
-  //      in 0.08 steps down to 0.55. If it fits, leave it at 1.
-  // Runs on every fact change (pick) and on active flips so a fresh
-  // slide entry gets a recompute.
+  // v87 — auto-shrink the content block to fit its own region. The
+  // content-region has a fixed flex-basis (82% of slide body), with
+  // the dots-region reserved separately below. Measure scrollHeight
+  // vs. our own clientHeight — if content overflows, walk down
+  // --fact-scale until it fits or we hit the 0.55 floor.
+  // The .rt-fact-ambient container writes --fact-scale at the
+  // ambient level so headline/suffix/body all scale together. We set
+  // it on the content ref too so it's accessible locally.
   const contentRef = useRef(null);
   useLayoutEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    // Reset to full size first so shrink/grow both work when the fact
-    // rotates to a shorter one.
-    el.style.setProperty('--fact-scale', '1');
-    // Defer one frame so the new font-size has applied before measuring.
+    const ambient = el.closest('.rt-fact-ambient');
+    if (!ambient) return;
+    ambient.style.setProperty('--fact-scale', '1');
     const raf = requestAnimationFrame(() => {
-      const parent = el.parentElement;
-      if (!parent) return;
-      // Available height = parent (slide body) minus footer reserve
-      // so we don't run into the dots. The dots occupy ~clamp(48..72)px
-      // plus their own bottom offset; 90px is a safe reserve that
-      // matches what the CSS layout leaves.
-      const DOTS_RESERVE = 90;
-      const maxH = Math.max(0, parent.clientHeight - DOTS_RESERVE);
       let scale = 1;
-      // scrollHeight reflects the natural content height; walk down
-      // until it fits or we hit the floor.
-      while (el.scrollHeight > maxH && scale > 0.55) {
+      while (el.scrollHeight > el.clientHeight + 2 && scale > 0.55) {
         scale -= 0.08;
-        el.style.setProperty('--fact-scale', scale.toFixed(2));
+        ambient.style.setProperty('--fact-scale', scale.toFixed(2));
       }
     });
     return () => cancelAnimationFrame(raf);
