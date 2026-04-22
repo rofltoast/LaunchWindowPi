@@ -18,10 +18,10 @@ set -euo pipefail
 
 KIOSK_URL="${KIOSK_URL:-http://localhost:8080/retro?autostart=1}"
 DISPLAY_NUM="${DISPLAY_NUM:-99}"
-W=1280
-H=720
-FPS=24
-VBITRATE="${VBITRATE:-3500k}"
+W=960
+H=540
+FPS=20
+VBITRATE="${VBITRATE:-2500k}"
 ABITRATE="${ABITRATE:-128k}"
 YT_URL="rtmp://a.rtmp.youtube.com/live2"
 STREAM_KEY="${YOUTUBE_STREAM_KEY:?YOUTUBE_STREAM_KEY env not set}"
@@ -67,6 +67,7 @@ for i in $(seq 1 40); do
   sleep 0.25
 done
 pactl set-default-sink vsfb_out || true
+export PULSE_SINK=vsfb_out
 
 # --- 3. headless chromium ----------------------------------------
 CHROME_PROFILE="${XDG_RUNTIME_DIR}/chrome-profile"
@@ -86,6 +87,7 @@ mkdir -p "$CHROME_PROFILE"
   --window-position=0,0 \
   --start-fullscreen \
   --force-device-scale-factor=1 \
+  --disable-dev-shm-usage \
   --app="$KIOSK_URL" \
   >/dev/null 2>&1 &
 PIDS+=($!)
