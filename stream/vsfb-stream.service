@@ -1,0 +1,27 @@
+[Unit]
+Description=VSFB-TV retro kiosk — 720p YouTube Live
+# We want this up whenever the nginx kiosk container is up. Network-online
+# guards the RTMP push from racing DHCP at boot.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+# Secrets live OUT of the repo. Mode 600, root:root on disk.
+EnvironmentFile=/etc/vsfb-stream.env
+ExecStart=/opt/vsfb-stream/run.sh
+Restart=on-failure
+RestartSec=10
+# Cap resources — the Pi also runs nginx + voice-server. These numbers
+# leave generous headroom for both. Tune down if the kiosk CPU spikes.
+MemoryMax=900M
+CPUQuota=220%
+# Route stdout/stderr to journalctl so we get actual logs.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vsfb-stream
+
+[Install]
+WantedBy=multi-user.target
